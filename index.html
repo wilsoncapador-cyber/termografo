@@ -429,6 +429,31 @@
     .btn-submit:hover { opacity: 0.85; }
     .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
 
+    .img-upload-area {
+      border: 1.5px dashed var(--border2);
+      border-radius: 10px;
+      padding: 1.25rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+      margin-bottom: 14px;
+    }
+    .img-upload-area:hover, .img-upload-area.drag { border-color: var(--accent); background: rgba(0,212,170,0.04); }
+    .img-upload-area input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .img-upload-area p { font-size: 0.8rem; color: var(--muted); pointer-events: none; }
+    .img-upload-area span { font-size: 0.75rem; color: var(--accent); pointer-events: none; }
+    .img-preview-wrap { position: relative; display: inline-block; margin-top: 8px; }
+    .img-preview-wrap img { max-height: 120px; border-radius: 8px; border: 1px solid var(--border2); display: block; }
+    .img-preview-wrap .btn-remove-img { position: absolute; top: -6px; right: -6px; background: #ef4444; border: none; border-radius: 50%; width: 20px; height: 20px; color: #fff; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .url-input-wrap { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+    .url-input-wrap input { flex: 1; }
+    .tab-btns { display: flex; gap: 6px; margin-bottom: 12px; }
+    .tab-btn { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-family: var(--mono); font-size: 0.72rem; padding: 5px 12px; cursor: pointer; transition: all .2s; letter-spacing: 0.04em; }
+    .tab-btn.active { background: rgba(0,212,170,0.1); border-color: var(--accent); color: var(--accent); }
+    .thermal-img { width: 100%; max-height: 220px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border2); margin-bottom: 1rem; }
+    .thermal-placeholder { background: var(--surface2); border-radius: 10px; height: 80px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 0.75rem; font-family: var(--mono); margin-bottom: 1rem; border: 1px dashed var(--border2); }
+
     @media (max-width: 640px) {
       main { padding: 1rem; }
       header { padding: 1rem; }
@@ -553,6 +578,38 @@
       </div>
     </div>
     <div class="preview-box" id="prevBox"></div>
+
+    <div class="form-row">
+      <label>Imagen termográfica</label>
+      <div class="tab-btns">
+        <button type="button" class="tab-btn active" onclick="switchTab('file')">📁 Subir archivo</button>
+        <button type="button" class="tab-btn" onclick="switchTab('url')">🔗 Pegar URL</button>
+      </div>
+      <div id="tabFile">
+        <div class="img-upload-area" id="dropArea">
+          <input type="file" id="fImgFile" accept="image/*" onchange="handleFileUpload(this)" />
+          <p>Arrastra la imagen aquí o haz clic para seleccionar</p>
+          <span>PNG, JPG, BMP — imágenes termográficas</span>
+        </div>
+        <div id="filePreview" style="display:none; text-align:center;">
+          <div class="img-preview-wrap">
+            <img id="filePreviewImg" src="" alt="Vista previa imagen termográfica" />
+            <button class="btn-remove-img" onclick="removeImg()" title="Eliminar imagen">✕</button>
+          </div>
+        </div>
+      </div>
+      <div id="tabUrl" style="display:none;">
+        <div class="url-input-wrap">
+          <input id="fImgUrl" type="url" placeholder="https://ejemplo.com/imagen-termica.jpg" oninput="previewUrl()" />
+        </div>
+        <div id="urlPreview" style="display:none; text-align:center;">
+          <div class="img-preview-wrap">
+            <img id="urlPreviewImg" src="" alt="Vista previa imagen termográfica" style="max-height:120px; border-radius:8px; border:1px solid var(--border2);" />
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="form-2col">
       <div class="form-row">
         <label>Componente afectado</label>
@@ -600,8 +657,56 @@
   let selectedId = null;
   let chartInst = null;
 
+  // ─── SEED INICIAL (inspecciones demo con imágenes para el jurado) ────
+  const SEED = [
+    {
+      id: 'DEMO-001',
+      nombre: 'Tablero MCC Principal — Sala Eléctrica',
+      tipo_equipo: 'Tablero Eléctrico',
+      ubicacion: 'Sala Eléctrica Principal',
+      temperatura_punto: 95.6,
+      temperatura_referencia: 48.2,
+      temperatura_ambiente: 29.0,
+      delta_T: 47.4,
+      severidad: 4,
+      componente_afectado: 'Contactor trifásico 200A — Fase T',
+      causa_probable: 'Contactos quemados por arco eléctrico sostenido',
+      tecnico: 'Ing. Wilson Capador',
+      fecha_inspeccion: new Date().toISOString(),
+      imagen_plana: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Electrical_Main_and_distribution_panel_for_480_volt.JPG/640px-Electrical_Main_and_distribution_panel_for_480_volt.JPG',
+      imagen_termica: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Thermal_image_of_an_electric_motor.jpg/640px-Thermal_image_of_an_electric_motor.jpg'
+    },
+    {
+      id: 'DEMO-002',
+      nombre: 'Transformador TR-Demo 630kVA',
+      tipo_equipo: 'Transformador de Distribución',
+      ubicacion: 'Subestación Central',
+      temperatura_punto: 61.3,
+      temperatura_referencia: 44.0,
+      temperatura_ambiente: 28.5,
+      delta_T: 17.3,
+      severidad: 3,
+      componente_afectado: 'Boquilla de alta tensión — Fase R',
+      causa_probable: 'Degradación del aislante por envejecimiento térmico',
+      tecnico: 'Ing. Wilson Capador',
+      fecha_inspeccion: new Date(Date.now() - 86400000).toISOString(),
+      imagen_plana: 'https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Polemount-singlephase-45kva-closeup.jpg/640px-Polemount-singlephase-45kva-closeup.jpg',
+      imagen_termica: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Infrared_thermography_image.jpg/640px-Infrared_thermography_image.jpg'
+    }
+  ];
+
+  function seedLocalStorage() {
+    const existing = JSON.parse(localStorage.getItem('termografia_local') || '[]');
+    const ids = existing.map(d => d.id);
+    const toAdd = SEED.filter(s => !ids.includes(s.id));
+    if (toAdd.length > 0) {
+      localStorage.setItem('termografia_local', JSON.stringify([...toAdd, ...existing]));
+    }
+  }
+
   // ─── FETCH (GET) ─────────────────────────────────────────────────────
   async function loadData() {
+    seedLocalStorage();
     try {
       // Carga datos remotos
       const res = await fetch(API_URL);
@@ -714,6 +819,23 @@
           </div>
           <span class="badge ${s.cls}" style="font-size:.78rem;padding:6px 12px;"><span class="dot ${s.dot}"></span>${s.label}</span>
         </div>
+        ${(d.imagen_plana || d.imagen_termica) ? `
+        <div style="margin-bottom:1rem;">
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button onclick="toggleImg(this,'plana')" class="tab-btn active" style="font-size:0.7rem;padding:4px 12px;">📷 Plana</button>
+            <button onclick="toggleImg(this,'termica')" class="tab-btn" style="font-size:0.7rem;padding:4px 12px;">🌡️ Térmica</button>
+          </div>
+          <div id="imgPlana">
+            ${d.imagen_plana
+              ? `<img src="${d.imagen_plana}" alt="Imagen plana de ${d.nombre}" class="thermal-img" onerror="this.parentElement.innerHTML='<div class=\\'thermal-placeholder\\'>📷 Imagen no disponible</div>'" />`
+              : `<div class="thermal-placeholder">📷 Sin imagen plana registrada</div>`}
+          </div>
+          <div id="imgTermica" style="display:none;">
+            ${d.imagen_termica
+              ? `<img src="${d.imagen_termica}" alt="Imagen térmica de ${d.nombre}" class="thermal-img" onerror="this.parentElement.innerHTML='<div class=\\'thermal-placeholder\\'>🌡️ Imagen no disponible</div>'" />`
+              : `<div class="thermal-placeholder">🌡️ Sin imagen térmica registrada</div>`}
+          </div>
+        </div>` : `<div class="thermal-placeholder">📷 Sin imágenes registradas</div>`}
         <div class="temps-grid">
           <div class="temp-card"><div class="temp-label">T° PUNTO</div><div class="temp-val">${d.temperatura_punto}°</div></div>
           <div class="temp-card"><div class="temp-label">T° REFERENCIA</div><div class="temp-val">${d.temperatura_referencia}°</div></div>
@@ -756,7 +878,10 @@
 
   // ─── MODAL ───────────────────────────────────────────────────────────
   function openModal() { document.getElementById('overlay').classList.add('open'); }
-  function closeModal() { document.getElementById('overlay').classList.remove('open'); }
+  function closeModal() {
+    document.getElementById('overlay').classList.remove('open');
+    resetImgForm();
+  }
   function closeModalOutside(e) { if (e.target === document.getElementById('overlay')) closeModal(); }
 
   function previewSev() {
@@ -797,6 +922,8 @@
     await new Promise(r => setTimeout(r, 600));
 
     const delta  = parseFloat((tp - tr).toFixed(1));
+    const imagen_termica = getImageValue();
+
     const newRec = {
       id: 'INS-' + String(allData.length + 1).padStart(3, '0'),
       nombre, tipo_equipo: tipo, ubicacion: ubi,
@@ -805,6 +932,7 @@
       componente_afectado: comp,
       causa_probable: 'Pendiente de análisis técnico',
       tecnico: tec,
+      imagen_termica,
       fecha_inspeccion: new Date().toISOString()
     };
 
@@ -817,6 +945,92 @@
     render();
     buildChart();
   }
+
+  function toggleImg(btn, tipo) {
+    document.querySelectorAll('.detail .tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('imgPlana').style.display   = tipo === 'plana'   ? 'block' : 'none';
+    document.getElementById('imgTermica').style.display = tipo === 'termica' ? 'block' : 'none';
+  }
+
+  // ─── IMAGEN TÉRMICA ──────────────────────────────────────────────────
+  let imgBase64 = null;
+  let imgTab = 'file';
+
+  function switchTab(tab) {
+    imgTab = tab;
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', (i===0 && tab==='file') || (i===1 && tab==='url')));
+    document.getElementById('tabFile').style.display = tab === 'file' ? 'block' : 'none';
+    document.getElementById('tabUrl').style.display  = tab === 'url'  ? 'block' : 'none';
+  }
+
+  function handleFileUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      imgBase64 = e.target.result;
+      document.getElementById('filePreviewImg').src = imgBase64;
+      document.getElementById('filePreview').style.display = 'block';
+      document.getElementById('dropArea').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function removeImg() {
+    imgBase64 = null;
+    document.getElementById('fImgFile').value = '';
+    document.getElementById('filePreview').style.display = 'none';
+    document.getElementById('dropArea').style.display = 'block';
+  }
+
+  function previewUrl() {
+    const url = document.getElementById('fImgUrl').value.trim();
+    const prev = document.getElementById('urlPreview');
+    if (url) {
+      document.getElementById('urlPreviewImg').src = url;
+      prev.style.display = 'block';
+    } else {
+      prev.style.display = 'none';
+    }
+  }
+
+  function getImageValue() {
+    if (imgTab === 'file') return imgBase64 || null;
+    const url = document.getElementById('fImgUrl').value.trim();
+    return url || null;
+  }
+
+  function resetImgForm() {
+    imgBase64 = null;
+    imgTab = 'file';
+    document.getElementById('fImgFile').value = '';
+    document.getElementById('fImgUrl').value = '';
+    document.getElementById('filePreview').style.display = 'none';
+    document.getElementById('dropArea').style.display = 'block';
+    document.getElementById('urlPreview').style.display = 'none';
+    switchTab('file');
+  }
+
+  // ─── DRAG & DROP ─────────────────────────────────────────────────────
+  const dropArea = document.getElementById('dropArea');
+  dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('drag'); });
+  dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag'));
+  dropArea.addEventListener('drop', e => {
+    e.preventDefault();
+    dropArea.classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        imgBase64 = ev.target.result;
+        document.getElementById('filePreviewImg').src = imgBase64;
+        document.getElementById('filePreview').style.display = 'block';
+        dropArea.style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+    }
+  });
 
   loadData();
 </script>
